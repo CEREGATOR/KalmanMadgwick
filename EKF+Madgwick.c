@@ -16,7 +16,7 @@ KalmanMadgwickFilter_t *KalmanMadgwickAlloc(double x,
     KalmanMadgwickFilter_t *f = (KalmanMadgwickFilter_t *)malloc(sizeof(KalmanMadgwickFilter_t));
     assert(f);
     f->Rot = MatrixAlloc(3, 3); // rotation matrix
-    f->E = MatrixAlloc(3, 3); // rotation matrix
+    f->E = MatrixAlloc(3, 3);   // rotation matrix
     f->kf = KalmanFilterCreate(15, 3, 0);
     /*initialization*/
     f->predictTime = f->updateTime = timeStamp;
@@ -52,13 +52,16 @@ static void rebuildRot(KalmanMadgwickFilter_t *f)
 }
 //////////////////////////////////////////////////////////////////////////
 
-
-static void rebuildE(KalmanMadgwickFilter_t *f,double phi0,double phi1,double phi2)
+static void rebuildE(KalmanMadgwickFilter_t *f)
 {
+    double phi0 = atan2(f->Rot->data[2][1], f->Rot->data[2][2]);
+    double phi1 = -atan(f->Rot->data[2][0] / sqrt(1 - pow(f->Rot->data[2][0], 2)));
+    double phi2 = atan2(f->Rot->data[1][0], f->Rot->data[0][0]);
+
     MatrixSet(f->E,
-              1.0, sin(phi0)*tan(phi1), cos(phi0)*tan(phi1),
-              0.0, cos(phi0), -1*sin(phi0),
-              0.0, sin(phi0)/cos(phi1), cos(phi0)/cos(phi1));
+              1.0, sin(phi0) * tan(phi1), cos(phi0) * tan(phi1),
+              0.0, cos(phi0), -1 * sin(phi0),
+              0.0, sin(phi0) / cos(phi1), cos(phi0) / cos(phi1));
 }
 //////////////////////////////////////////////////////////////////////////
 
@@ -73,7 +76,7 @@ static void rebuildF(KalmanMadgwickFilter_t *f, double dt)
     f->kf->F->data[1][4] = dt;
     f->kf->F->data[2][5] = dt;
 
-    MatrixScale(f->Rot,(-1*dt));
+    MatrixScale(f->Rot, (-1 * dt));
 
     f->kf->F->data[3][12] = f->Rot->data[0][0];
     f->kf->F->data[3][13] = f->Rot->data[0][1];
@@ -88,8 +91,8 @@ static void rebuildF(KalmanMadgwickFilter_t *f, double dt)
     f->kf->F->data[5][14] = f->Rot->data[2][2];
 
     rebuildRot(f);
-    MatrixScale(f->Rot,(-1*dt*dt));
-    MatrixScale(f->Rot,0.5);
+    MatrixScale(f->Rot, (-1 * dt * dt));
+    MatrixScale(f->Rot, 0.5);
 
     f->kf->F->data[0][12] = f->Rot->data[0][0];
     f->kf->F->data[0][13] = f->Rot->data[0][1];
@@ -103,16 +106,16 @@ static void rebuildF(KalmanMadgwickFilter_t *f, double dt)
     f->kf->F->data[2][13] = f->Rot->data[2][1];
     f->kf->F->data[2][14] = f->Rot->data[2][2];
 
-    MatrixScale(f->E,(-1*dt));
-    f->kf->F->data[6][9 ] = f->E->data[0][0];
+    MatrixScale(f->E, (-1 * dt));
+    f->kf->F->data[6][9] = f->E->data[0][0];
     f->kf->F->data[6][10] = f->E->data[0][1];
     f->kf->F->data[6][11] = f->E->data[0][2];
 
-    f->kf->F->data[7][9 ] = f->E->data[1][0];
+    f->kf->F->data[7][9] = f->E->data[1][0];
     f->kf->F->data[7][10] = f->E->data[1][1];
     f->kf->F->data[7][11] = f->E->data[1][2];
 
-    f->kf->F->data[8][9 ] = f->E->data[2][0];
+    f->kf->F->data[8][9] = f->E->data[2][0];
     f->kf->F->data[8][10] = f->E->data[2][1];
     f->kf->F->data[8][11] = f->E->data[2][2];
 }
@@ -163,9 +166,9 @@ static void rebuildQ(KalmanMadgwickFilter_t *f)
     f->kf->Q->data[7][7] = Degree2Rad(NOISE_GYR[Y]);
     f->kf->Q->data[8][8] = Degree2Rad(NOISE_GYR[Z]);
 
-    f->kf->Q->data[9 ][9 ] =  Degree2Rad(BIAS_GYR[X]);
-    f->kf->Q->data[10][10] =  Degree2Rad(BIAS_GYR[Y]);
-    f->kf->Q->data[11][11] =  Degree2Rad(BIAS_GYR[Z]);
+    f->kf->Q->data[9][9] = Degree2Rad(BIAS_GYR[X]);
+    f->kf->Q->data[10][10] = Degree2Rad(BIAS_GYR[Y]);
+    f->kf->Q->data[11][11] = Degree2Rad(BIAS_GYR[Z]);
 
     f->kf->Q->data[12][12] = g2ms2(BIAS_ACC[X]);
     f->kf->Q->data[13][13] = g2ms2(BIAS_ACC[Y]);
@@ -184,7 +187,7 @@ void KalmanMadgwickPredict(KalmanMadgwickFilter_t *k,
     rebuildU(k, xAcc, yAcc);
 
     ++k->predictCount;
-    rebuildQ(k, k->accDev);
+    rebuildQ(k);
 
     k->predictTime = timeNow;
     KalmanFilterPredict(k->kf);
