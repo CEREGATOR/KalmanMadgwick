@@ -28,7 +28,22 @@ KalmanMadgwickFilter_t *KalmanMadgwickAlloc(double x,
     MatrixSetIdentityDiag(f->kf->H); // state has 4d and measurement has 4d too. so here is identity
 
     MatrixSetIdentity(f->kf->Pk_k);
-    MatrixScale(f->kf->Pk_k, posDev); // todo get speed accuracy if possible
+
+    f->kf->Pk_k->data[0][0] = 0.5;
+    f->kf->Pk_k->data[1][1] = 0.5;
+    f->kf->Pk_k->data[2][2] = 0.5;
+
+    f->kf->Pk_k->data[6][6] = 10;
+    f->kf->Pk_k->data[7][7] = 10;
+    f->kf->Pk_k->data[8][8] = 10;
+
+    f->kf->Pk_k->data[9 ][9 ] = 500;
+    f->kf->Pk_k->data[10][10] = 500;
+    f->kf->Pk_k->data[11][11] = 500;
+
+    f->kf->Pk_k->data[12][12] = 500;
+    f->kf->Pk_k->data[13][13] = 500;
+    f->kf->Pk_k->data[14][14] = 500;
 
     return f;
 }
