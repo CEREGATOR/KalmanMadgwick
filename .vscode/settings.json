@@ -1,0 +1,13 @@
+{
+    "files.associations": {
+        "madgwickahrs.h": "c",
+        "stdint.h": "c",
+        "math.h": "c",
+        "assert.h": "c",
+        "kalmanmadgwick.h": "c",
+        "matrix.h": "c",
+        "kalman.h": "c",
+        "params_noise.h": "c",
+        "comm.h": "c"
+    }
+}
