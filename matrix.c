@@ -153,6 +153,23 @@ void MatrixAdd(matrix_t *ma,
         }
     }
 }
+
+void MatrixAddIncrease(matrix_t *ma,
+               matrix_t *mb)
+{
+    assert(ma);
+    assert(mb);
+    assert(ma->cols == mb->cols);
+
+    uint32_t r, c;
+    for (r = 0; r < ma->rows; ++r)
+    {
+        for (c = 0; c < ma->cols; ++c)
+        {
+            ma->data[r][c] += mb->data[r][c];
+        }
+    }
+}
 //////////////////////////////////////////////////////////////////////////
 
 void MatrixSubtract(matrix_t *ma,
@@ -281,6 +298,20 @@ bool MatrixEq(matrix_t *ma,
     return true;
 }
 //////////////////////////////////////////////////////////////////////////
+
+void MatrixIncrease(matrix_t *m,
+                 double scalar)
+{
+    assert(m);
+    uint32_t r, c;
+    for (r = 0; r < m->rows; ++r)
+    {
+        for (c = 0; c < m->cols; ++c)
+        {
+            m->data[r][c] += scalar;
+        }
+    }
+}
 
 void MatrixScale(matrix_t *m,
                  double scalar)

@@ -5,27 +5,30 @@
 #include "params_noise.h"
 #include "MadgwickAHRS.h"
 
-KalmanMadgwickFilter_t *KalmanMadgwickAlloc(double x,
-                                            double y,
-                                            double xVel,
-                                            double yVel,
-                                            double accDev,
-                                            double posDev,
-                                            double timeStamp)
+#define STATE_COUNT 15
+
+volatile float phi0 = 0.0f, phi1 = 0.0f, phi2 = 0.0f;
+
+KalmanMadgwickFilter_t *KalmanMadgwickAlloc(Coordinate_t *coor_, double timeStamp)
 {
     KalmanMadgwickFilter_t *f = (KalmanMadgwickFilter_t *)malloc(sizeof(KalmanMadgwickFilter_t));
     assert(f);
+    f->acc = MatrixAlloc(3, 1);
+    f->gyro = MatrixAlloc(3, 1);
+    f->coor = MatrixAlloc(3, 1);
+
     f->Rot = MatrixAlloc(3, 3); // rotation matrix
     f->E = MatrixAlloc(3, 3);   // rotation matrix
-    f->kf = KalmanFilterCreate(15, 3, 0);
+    f->kf = KalmanFilterCreate(STATE_COUNT, 3, 0);
     /*initialization*/
     f->predictTime = f->updateTime = timeStamp;
-    f->predictCount = 0;
-    f->accDev = accDev;
 
     MatrixSet(f->kf->Xk_k,
-              x, y, xVel, yVel);
-    MatrixSetIdentityDiag(f->kf->H); // state has 4d and measurement has 4d too. so here is identity
+              coor_->x, coor_->y, coor_->z);
+
+    f->kf->H->data[0][0] = 1;
+    f->kf->H->data[1][1] = 1;
+    f->kf->H->data[2][2] = 1;
 
     MatrixSetIdentity(f->kf->Pk_k);
 
@@ -37,7 +40,7 @@ KalmanMadgwickFilter_t *KalmanMadgwickAlloc(double x,
     f->kf->Pk_k->data[7][7] = 10;
     f->kf->Pk_k->data[8][8] = 10;
 
-    f->kf->Pk_k->data[9 ][9 ] = 500;
+    f->kf->Pk_k->data[9][9] = 500;
     f->kf->Pk_k->data[10][10] = 500;
     f->kf->Pk_k->data[11][11] = 500;
 
@@ -56,6 +59,47 @@ void KalmanMadgwickFree(KalmanMadgwickFilter_t *k)
     free(k);
 }
 
+static void matrixAcc(KalmanMadgwickFilter_t *f, Accelerometer_t *acc_in)
+{
+    MatrixSet(f->acc, acc_in->x, acc_in->y, acc_in->z);
+}
+
+static void matrixGyr(KalmanMadgwickFilter_t *f, Gyroscope_t *gyr_in)
+{
+    MatrixSet(f->gyro, gyr_in->x, gyr_in->y, gyr_in->z);
+}
+
+static void matrixCoor(KalmanMadgwickFilter_t *f, Coordinate_t *coor_in)
+{
+    MatrixSet(f->coor, coor_in->x, coor_in->y, coor_in->z);
+}
+
+//////////////////////////////////////////////////////////////////////////
+
+static void rebuildRoute(KalmanMadgwickFilter_t *f)
+{
+    MatrixSet(f->kf->route,
+              f->kf->Xk_k->data[0][0], f->kf->Xk_k->data[1][0], f->kf->Xk_k->data[2][0]);
+}
+
+static void rebuildSpeed(KalmanMadgwickFilter_t *f)
+{
+    MatrixSet(f->kf->route,
+              f->kf->Xk_k->data[3][0], f->kf->Xk_k->data[4][0], f->kf->Xk_k->data[5][0]);
+}
+
+static void rebuildBiasG(KalmanMadgwickFilter_t *f)
+{
+    MatrixSet(f->kf->bg,
+              f->kf->Xk_k->data[9][0], f->kf->Xk_k->data[10][0], f->kf->Xk_k->data[11][0]);
+}
+
+static void rebuildBiasA(KalmanMadgwickFilter_t *f)
+{
+    MatrixSet(f->kf->ba,
+              f->kf->Xk_k->data[12][0], f->kf->Xk_k->data[13][0], f->kf->Xk_k->data[14][0]);
+}
+
 //////////////////////////////////////////////////////////////////////////
 
 static void rebuildRot(KalmanMadgwickFilter_t *f)
@@ -69,9 +113,9 @@ static void rebuildRot(KalmanMadgwickFilter_t *f)
 
 static void rebuildE(KalmanMadgwickFilter_t *f)
 {
-    double phi0 = atan2(f->Rot->data[2][1], f->Rot->data[2][2]);
-    double phi1 = -atan(f->Rot->data[2][0] / sqrt(1 - pow(f->Rot->data[2][0], 2)));
-    double phi2 = atan2(f->Rot->data[1][0], f->Rot->data[0][0]);
+    phi0 = atan2(f->Rot->data[2][1], f->Rot->data[2][2]);
+    phi1 = -atan(f->Rot->data[2][0] / sqrt(1 - pow(f->Rot->data[2][0], 2)));
+    phi2 = atan2(f->Rot->data[1][0], f->Rot->data[0][0]);
 
     MatrixSet(f->E,
               1.0, sin(phi0) * tan(phi1), cos(phi0) * tan(phi1),
@@ -134,41 +178,17 @@ static void rebuildF(KalmanMadgwickFilter_t *f, double dt)
     f->kf->F->data[8][10] = f->E->data[2][1];
     f->kf->F->data[8][11] = f->E->data[2][2];
 }
-//////////////////////////////////////////////////////////////////////////
 
-static void rebuildU(KalmanMadgwickFilter_t *f,
-                     double xAcc,
-                     double yAcc)
-{
-    MatrixSet(f->kf->Uk,
-              xAcc,
-              yAcc);
-}
-//////////////////////////////////////////////////////////////////////////
-
-static void rebuildB(KalmanMadgwickFilter_t *f,
-                     double dt)
-{
-    double dt2 = 0.5 * dt * dt;
-    MatrixSet(f->kf->B,
-              dt2, 0.0,
-              0.0, dt2,
-              dt, 0.0,
-              0.0, dt);
-}
-//////////////////////////////////////////////////////////////////////////
-
-static void rebuildR(KalmanMadgwickFilter_t *f,
-                     double posSigma)
+static void rebuildR(KalmanMadgwickFilter_t *f)
 {
     //  MatrixSetIdentity(f->kf->R);
     //  MatrixScale(f->kf->R, posSigma*posSigma);
-    double velSigma = posSigma * 1.0e-01;
     MatrixSet(f->kf->R,
               pow(RTK_NOISE[X], 2), 0.0, 0.0,
               0.0, pow(RTK_NOISE[Y], 2), 0.0,
               0.0, 0.0, pow(RTK_NOISE[Z], 2));
 }
+
 //////////////////////////////////////////////////////////////////////////
 
 static void rebuildQ(KalmanMadgwickFilter_t *f)
@@ -190,60 +210,71 @@ static void rebuildQ(KalmanMadgwickFilter_t *f)
     f->kf->Q->data[14][14] = g2ms2(BIAS_ACC[Z]);
 }
 
-void KalmanMadgwickPredict(KalmanMadgwickFilter_t *k,
-                           double timeNow,
-                           double xAcc,
-                           double yAcc)
+void KalmanMadgwickPredict(KalmanMadgwickFilter_t *k, double timeNow, Gyroscope_t *gyr_, Accelerometer_t *acc_)
 {
     double dt = (timeNow - k->predictTime) / 1.0e+3;
 
     rebuildF(k, dt);
-    rebuildB(k, dt);
-    rebuildU(k, xAcc, yAcc);
-
-    ++k->predictCount;
     rebuildQ(k);
+
+    acc_->x -= k->kf->ba->data[0][0];
+    acc_->y -= k->kf->ba->data[1][0];
+    acc_->z -= k->kf->ba->data[2][0];
+
+    gyr_->x -= k->kf->bg->data[0][0];
+    gyr_->y -= k->kf->bg->data[1][0];
+    gyr_->z -= k->kf->bg->data[2][0];
+
+    matrixAcc(k, acc_);
+    matrixGyr(k, gyr_);
+
+    MadgwickAHRSupdateIMU(gyr_->x, gyr_->y, gyr_->z, acc_->x, acc_->y, acc_->z);
+
+    rebuildRot(k);
+    rebuildE(k);
+
+    MatrixMultiply(k->Rot, k->acc, k->kf->acc_rot);
+    MatrixScale(k->kf->acc_rot, dt);
+    MatrixAddIncrease(k->kf->speed, k->kf->acc_rot);
+
+    k->kf->Xk_k->data[3][0] = k->kf->speed->data[0][0];
+    k->kf->Xk_k->data[4][0] = k->kf->speed->data[1][0];
+    k->kf->Xk_k->data[5][0] = k->kf->speed->data[2][0];
+
+    MatrixScale(k->kf->speed, dt);
+    MatrixMultiply(k->Rot, k->acc, k->kf->acc_rot);
+    MatrixScale(k->kf->acc_rot, dt * dt * 0.5);
+
+    MatrixAddIncrease(k->kf->route, k->kf->acc_rot);
+    MatrixAddIncrease(k->kf->route, k->kf->speed);
+
+    k->kf->Xk_k->data[0][0] = k->kf->route->data[0][0];
+    k->kf->Xk_k->data[1][0] = k->kf->route->data[1][0];
+    k->kf->Xk_k->data[2][0] = k->kf->route->data[2][0];
 
     k->predictTime = timeNow;
     KalmanFilterPredict(k->kf);
-    MatrixCopy(k->kf->Xk_km1, k->kf->Xk_k);
+    // MatrixCopy(k->kf->Xk_km1, k->kf->Xk_k);
 }
 //////////////////////////////////////////////////////////////////////////
 
-void KalmanMadgwickUpdate(KalmanMadgwickFilter_t *k,
-                          double timeNow,
-                          double x,
-                          double y,
-                          double xVel,
-                          double yVel,
-                          double posDev)
+void KalmanMadgwickUpdate(KalmanMadgwickFilter_t *k, double timeNow, Coordinate_t *corr_)
 {
     //  double dt = timeNow - k->updateTime;
     k->predictCount = 0;
     k->updateTime = timeNow;
-    rebuildR(k, posDev);
-    MatrixSet(k->kf->Zk, x, y, xVel, yVel);
+    rebuildR(k);
+    matrixCoor(k, corr_);
+    k->kf->Zk = k->coor;
+
     KalmanFilterUpdate(k->kf);
 }
 //////////////////////////////////////////////////////////////////////////
 
-double KalmanMadgwickGetX(const KalmanMadgwickFilter_t *k)
+void KalmanMadgwickGetCorr(const KalmanMadgwickFilter_t *k, Coordinate_t *corr)
 {
-    return k->kf->Xk_k->data[0][0];
-}
-
-double KalmanMadgwickGetY(const KalmanMadgwickFilter_t *k)
-{
-    return k->kf->Xk_k->data[1][0];
-}
-
-double KalmanMadgwickGetXVel(const KalmanMadgwickFilter_t *k)
-{
-    return k->kf->Xk_k->data[2][0];
-}
-
-double KalmanMadgwickGetYVel(const KalmanMadgwickFilter_t *k)
-{
-    return k->kf->Xk_k->data[3][0];
+    corr->x = k->coor->data[0][0];
+    corr->y = k->coor->data[1][0];
+    corr->z = k->coor->data[2][0];
 }
 //////////////////////////////////////////////////////////////////////////

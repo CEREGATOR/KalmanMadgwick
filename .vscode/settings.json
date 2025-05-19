@@ -8,6 +8,7 @@
         "matrix.h": "c",
         "kalman.h": "c",
         "params_noise.h": "c",
-        "comm.h": "c"
+        "comm.h": "c",
+        "stdlib.h": "c"
     }
 }

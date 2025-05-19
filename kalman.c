@@ -11,8 +11,16 @@ KalmanFilter_t *KalmanFilterCreate(int stateDimension,
   f->Q = MatrixAlloc(stateDimension, stateDimension);
   f->R = MatrixAlloc(measureDimension, measureDimension);
 
-  f->B = MatrixAlloc(stateDimension, controlDimension);
-  f->Uk = MatrixAlloc(controlDimension, 1);
+  // f->B = MatrixAlloc(stateDimension, controlDimension);
+  // f->Uk = MatrixAlloc(controlDimension, 1);
+
+  f->route = MatrixAlloc(3, 1);
+  f->speed = MatrixAlloc(3, 1);
+  f->euler = MatrixAlloc(3, 1);
+  f->bg = MatrixAlloc(3, 1);
+  f->ba = MatrixAlloc(3, 1);
+
+  f->acc_rot = MatrixAlloc(3, 1);
 
   f->Zk = MatrixAlloc(measureDimension, 1);
 
@@ -39,11 +47,11 @@ KalmanFilter_t *KalmanFilterCreate(int stateDimension,
 void KalmanFilterFree(KalmanFilter_t *k) {
   MatrixFree(k->F);
   MatrixFree(k->H);
-  MatrixFree(k->B);
+  // MatrixFree(k->B);
   MatrixFree(k->Q);
   MatrixFree(k->R);
 
-  MatrixFree(k->Uk);
+  // MatrixFree(k->Uk);
   MatrixFree(k->Zk);
 
   MatrixFree(k->Xk_km1);
@@ -66,9 +74,9 @@ void KalmanFilterFree(KalmanFilter_t *k) {
 
 void KalmanFilterPredict(KalmanFilter_t *k) {
   //Xk|k-1 = Fk*Xk-1|k-1 + Bk*Uk
-  MatrixMultiply(k->F, k->Xk_k, k->Xk_km1);
-  MatrixMultiply(k->B, k->Uk, k->auxBxU);
-  MatrixAdd(k->Xk_km1, k->auxBxU, k->Xk_km1);
+  // MatrixMultiply(k->F, k->Xk_k, k->Xk_km1);
+  // MatrixMultiply(k->B, k->Uk, k->auxBxU);
+  // MatrixAdd(k->Xk_km1, k->auxBxU, k->Xk_km1);
 
   //Pk|k-1 = Fk*Pk-1|k-1*Fk(t) + Qk
   MatrixMultiply(k->F, k->Pk_k, k->auxSDxSD);

@@ -31,6 +31,8 @@ void MatrixAdd(matrix_t *ma,
                matrix_t *mb,
                matrix_t *mc);
 
+void MatrixAddIncrease(matrix_t *ma,
+               matrix_t *mb);
 /* Subtract matrices a and b and put the result in c. */
 void MatrixSubtract(matrix_t *ma,
                     matrix_t *mb,
@@ -59,6 +61,8 @@ bool MatrixEq(matrix_t *a,
 
 /* Multiply a matrix by a scalar. */
 void MatrixScale(matrix_t *m, double scalar);
+
+void MatrixIncrease(matrix_t *m,double scalar);
 
 /* Invert a square matrix.
    Returns whether the matrix is invertible.
