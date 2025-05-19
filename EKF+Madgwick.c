@@ -217,6 +217,9 @@ void KalmanMadgwickPredict(KalmanMadgwickFilter_t *k, double timeNow, Gyroscope_
     rebuildF(k, dt);
     rebuildQ(k);
 
+    rebuildBiasA(k);
+    rebuildBiasG(k);
+
     acc_->x -= k->kf->ba->data[0][0];
     acc_->y -= k->kf->ba->data[1][0];
     acc_->z -= k->kf->ba->data[2][0];
@@ -227,6 +230,9 @@ void KalmanMadgwickPredict(KalmanMadgwickFilter_t *k, double timeNow, Gyroscope_
 
     matrixAcc(k, acc_);
     matrixGyr(k, gyr_);
+
+    rebuildRoute(k);
+    rebuildSpeed(k);
 
     MadgwickAHRSupdateIMU(gyr_->x, gyr_->y, gyr_->z, acc_->x, acc_->y, acc_->z);
 
@@ -273,8 +279,8 @@ void KalmanMadgwickUpdate(KalmanMadgwickFilter_t *k, double timeNow, Coordinate_
 
 void KalmanMadgwickGetCorr(const KalmanMadgwickFilter_t *k, Coordinate_t *corr)
 {
-    corr->x = k->coor->data[0][0];
-    corr->y = k->coor->data[1][0];
-    corr->z = k->coor->data[2][0];
+    corr->x = k->kf->Xk_k->data[0][0];
+    corr->y = k->kf->Xk_k->data[1][0];
+    corr->z = k->kf->Xk_k->data[2][0];
 }
 //////////////////////////////////////////////////////////////////////////

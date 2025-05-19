@@ -25,6 +25,6 @@ void KalmanMadgwickFree(KalmanMadgwickFilter_t *k);
 void KalmanMadgwickPredict(KalmanMadgwickFilter_t *k, double timeNow, Gyroscope_t *, Accelerometer_t *);
 void KalmanMadgwickUpdate(KalmanMadgwickFilter_t *k, double timeNow, Coordinate_t *);
 
-Coordinate_t KalmanMadgwickGetCorr(const KalmanMadgwickFilter_t *k);
+void KalmanMadgwickGetCorr(const KalmanMadgwickFilter_t *k, Coordinate_t *corr);
 
 #endif // KALMANMADGWICK_H
