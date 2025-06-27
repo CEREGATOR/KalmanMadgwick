@@ -33,7 +33,6 @@ typedef struct KalmanFilter {
 
   matrix_t *route;
   matrix_t *speed;
-  matrix_t *euler;
   matrix_t *bg;
   matrix_t *ba;
 

@@ -12,6 +12,7 @@ typedef struct KalmanMadgwickFilter
   uint32_t predictCount;
   matrix_t *coor;
   matrix_t *acc;
+  matrix_t *g;
   matrix_t *gyro;
   matrix_t *Rot;
   matrix_t *E;

@@ -5,7 +5,7 @@
 #include "params_noise.h"
 #include "MadgwickAHRS.h"
 
-#define STATE_COUNT 15
+#define STATE_COUNT 12
 
 volatile float phi0 = 0.0f, phi1 = 0.0f, phi2 = 0.0f;
 
@@ -13,12 +13,12 @@ KalmanMadgwickFilter_t *KalmanMadgwickAlloc(Coordinate_t *coor_, double timeStam
 {
     KalmanMadgwickFilter_t *f = (KalmanMadgwickFilter_t *)malloc(sizeof(KalmanMadgwickFilter_t));
     assert(f);
+    f->g = MatrixAlloc(3, 1);
     f->acc = MatrixAlloc(3, 1);
     f->gyro = MatrixAlloc(3, 1);
     f->coor = MatrixAlloc(3, 1);
 
     f->Rot = MatrixAlloc(3, 3); // rotation matrix
-    f->E = MatrixAlloc(3, 3);   // rotation matrix
     f->kf = KalmanFilterCreate(STATE_COUNT, 3, 0);
     /*initialization*/
     f->predictTime = f->updateTime = timeStamp;
@@ -30,23 +30,21 @@ KalmanMadgwickFilter_t *KalmanMadgwickAlloc(Coordinate_t *coor_, double timeStam
     f->kf->H->data[1][1] = 1;
     f->kf->H->data[2][2] = 1;
 
+    f->g->data[2][0] = g2ms2(1);
+    
     MatrixSetIdentity(f->kf->Pk_k);
 
     f->kf->Pk_k->data[0][0] = 0.5;
     f->kf->Pk_k->data[1][1] = 0.5;
     f->kf->Pk_k->data[2][2] = 0.5;
 
-    f->kf->Pk_k->data[6][6] = 10;
-    f->kf->Pk_k->data[7][7] = 10;
-    f->kf->Pk_k->data[8][8] = 10;
+    f->kf->Pk_k->data[6][6] = 500;
+    f->kf->Pk_k->data[7][7] = 500;
+    f->kf->Pk_k->data[8][8] = 500;
 
     f->kf->Pk_k->data[9][9] = 500;
     f->kf->Pk_k->data[10][10] = 500;
     f->kf->Pk_k->data[11][11] = 500;
-
-    f->kf->Pk_k->data[12][12] = 500;
-    f->kf->Pk_k->data[13][13] = 500;
-    f->kf->Pk_k->data[14][14] = 500;
 
     return f;
 }
@@ -91,13 +89,13 @@ static void rebuildSpeed(KalmanMadgwickFilter_t *f)
 static void rebuildBiasG(KalmanMadgwickFilter_t *f)
 {
     MatrixSet(f->kf->bg,
-              f->kf->Xk_k->data[9][0], f->kf->Xk_k->data[10][0], f->kf->Xk_k->data[11][0]);
+              f->kf->Xk_k->data[6][0], f->kf->Xk_k->data[7][0], f->kf->Xk_k->data[8][0]);
 }
 
 static void rebuildBiasA(KalmanMadgwickFilter_t *f)
 {
     MatrixSet(f->kf->ba,
-              f->kf->Xk_k->data[12][0], f->kf->Xk_k->data[13][0], f->kf->Xk_k->data[14][0]);
+              f->kf->Xk_k->data[9][0], f->kf->Xk_k->data[10][0], f->kf->Xk_k->data[11][0]);
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -108,19 +106,6 @@ static void rebuildRot(KalmanMadgwickFilter_t *f)
               2 * pow(q0, 2) - 1 + 2 * pow(q1, 2), 2 * (q1 * q2 + q0 * q3), 2 * (q1 * q3 - q0 * q2),
               2 * (q1 * q2 - q0 * q3), 2 * pow(q0, 2) - 1 + 2 * pow(q2, 2), 2 * (q2 * q3 + q0 * q1),
               2 * (q1 * q3 + q0 * q2), 2 * (q2 * q3 - q0 * q1), 2 * pow(q0, 2) - 1 + 2 * pow(q3, 2));
-}
-//////////////////////////////////////////////////////////////////////////
-
-static void rebuildE(KalmanMadgwickFilter_t *f)
-{
-    phi0 = atan2(f->Rot->data[2][1], f->Rot->data[2][2]);
-    phi1 = -atan(f->Rot->data[2][0] / sqrt(1 - pow(f->Rot->data[2][0], 2)));
-    phi2 = atan2(f->Rot->data[1][0], f->Rot->data[0][0]);
-
-    MatrixSet(f->E,
-              1.0, sin(phi0) * tan(phi1), cos(phi0) * tan(phi1),
-              0.0, cos(phi0), -1 * sin(phi0),
-              0.0, sin(phi0) / cos(phi1), cos(phi0) / cos(phi1));
 }
 //////////////////////////////////////////////////////////////////////////
 
@@ -137,46 +122,33 @@ static void rebuildF(KalmanMadgwickFilter_t *f, double dt)
 
     MatrixScale(f->Rot, (-1 * dt));
 
-    f->kf->F->data[3][12] = f->Rot->data[0][0];
-    f->kf->F->data[3][13] = f->Rot->data[0][1];
-    f->kf->F->data[3][14] = f->Rot->data[0][2];
+    f->kf->F->data[3][9 ] = f->Rot->data[0][0];
+    f->kf->F->data[3][10] = f->Rot->data[0][1];
+    f->kf->F->data[3][11] = f->Rot->data[0][2];
 
-    f->kf->F->data[4][12] = f->Rot->data[1][0];
-    f->kf->F->data[4][13] = f->Rot->data[1][1];
-    f->kf->F->data[4][14] = f->Rot->data[1][2];
+    f->kf->F->data[4][9 ] = f->Rot->data[1][0];
+    f->kf->F->data[4][10] = f->Rot->data[1][1];
+    f->kf->F->data[4][11] = f->Rot->data[1][2];
 
-    f->kf->F->data[5][12] = f->Rot->data[2][0];
-    f->kf->F->data[5][13] = f->Rot->data[2][1];
-    f->kf->F->data[5][14] = f->Rot->data[2][2];
+    f->kf->F->data[5][9 ] = f->Rot->data[2][0];
+    f->kf->F->data[5][10] = f->Rot->data[2][1];
+    f->kf->F->data[5][11] = f->Rot->data[2][2];
 
     rebuildRot(f);
     MatrixScale(f->Rot, (-1 * dt * dt));
     MatrixScale(f->Rot, 0.5);
 
-    f->kf->F->data[0][12] = f->Rot->data[0][0];
-    f->kf->F->data[0][13] = f->Rot->data[0][1];
-    f->kf->F->data[0][14] = f->Rot->data[0][2];
+    f->kf->F->data[0][9 ] = f->Rot->data[0][0];
+    f->kf->F->data[0][10] = f->Rot->data[0][1];
+    f->kf->F->data[0][11] = f->Rot->data[0][2];
 
-    f->kf->F->data[1][12] = f->Rot->data[1][0];
-    f->kf->F->data[1][13] = f->Rot->data[1][1];
-    f->kf->F->data[1][14] = f->Rot->data[1][2];
+    f->kf->F->data[1][9 ] = f->Rot->data[1][0];
+    f->kf->F->data[1][10] = f->Rot->data[1][1];
+    f->kf->F->data[1][11] = f->Rot->data[1][2];
 
-    f->kf->F->data[2][12] = f->Rot->data[2][0];
-    f->kf->F->data[2][13] = f->Rot->data[2][1];
-    f->kf->F->data[2][14] = f->Rot->data[2][2];
-
-    MatrixScale(f->E, (-1 * dt));
-    f->kf->F->data[6][9] = f->E->data[0][0];
-    f->kf->F->data[6][10] = f->E->data[0][1];
-    f->kf->F->data[6][11] = f->E->data[0][2];
-
-    f->kf->F->data[7][9] = f->E->data[1][0];
-    f->kf->F->data[7][10] = f->E->data[1][1];
-    f->kf->F->data[7][11] = f->E->data[1][2];
-
-    f->kf->F->data[8][9] = f->E->data[2][0];
-    f->kf->F->data[8][10] = f->E->data[2][1];
-    f->kf->F->data[8][11] = f->E->data[2][2];
+    f->kf->F->data[2][9 ] = f->Rot->data[2][0];
+    f->kf->F->data[2][10] = f->Rot->data[2][1];
+    f->kf->F->data[2][11] = f->Rot->data[2][2];
 }
 
 static void rebuildR(KalmanMadgwickFilter_t *f)
@@ -193,21 +165,17 @@ static void rebuildR(KalmanMadgwickFilter_t *f)
 
 static void rebuildQ(KalmanMadgwickFilter_t *f)
 {
-    f->kf->Q->data[3][3] = g2ms2(NOISE_ACC[X]);
-    f->kf->Q->data[4][4] = g2ms2(NOISE_ACC[Y]);
-    f->kf->Q->data[5][5] = g2ms2(NOISE_ACC[Z]);
+    f->kf->Q->data[3][3] = pow(g2ms2(NOISE_ACC[X]),2);
+    f->kf->Q->data[4][4] = pow(g2ms2(NOISE_ACC[Y]),2);
+    f->kf->Q->data[5][5] = pow(g2ms2(NOISE_ACC[Z]),2);
 
-    f->kf->Q->data[6][6] = Degree2Rad(NOISE_GYR[X]);
-    f->kf->Q->data[7][7] = Degree2Rad(NOISE_GYR[Y]);
-    f->kf->Q->data[8][8] = Degree2Rad(NOISE_GYR[Z]);
+    f->kf->Q->data[6][6] = pow(Degree2Rad(BIAS_GYR[X]),2);
+    f->kf->Q->data[7][7] = pow(Degree2Rad(BIAS_GYR[Y]),2);
+    f->kf->Q->data[8][8] = pow(Degree2Rad(BIAS_GYR[Z]),2);
 
-    f->kf->Q->data[9][9] = Degree2Rad(BIAS_GYR[X]);
-    f->kf->Q->data[10][10] = Degree2Rad(BIAS_GYR[Y]);
-    f->kf->Q->data[11][11] = Degree2Rad(BIAS_GYR[Z]);
-
-    f->kf->Q->data[12][12] = g2ms2(BIAS_ACC[X]);
-    f->kf->Q->data[13][13] = g2ms2(BIAS_ACC[Y]);
-    f->kf->Q->data[14][14] = g2ms2(BIAS_ACC[Z]);
+    f->kf->Q->data[9][9] =   pow(g2ms2(BIAS_ACC[X]),2);
+    f->kf->Q->data[10][10] = pow(g2ms2(BIAS_ACC[Y]),2);
+    f->kf->Q->data[11][11] = pow(g2ms2(BIAS_ACC[Z]),2);
 }
 
 void KalmanMadgwickPredict(KalmanMadgwickFilter_t *k, double timeNow, Gyroscope_t *gyr_, Accelerometer_t *acc_)
@@ -241,6 +209,7 @@ void KalmanMadgwickPredict(KalmanMadgwickFilter_t *k, double timeNow, Gyroscope_
 
     MatrixMultiply(k->Rot, k->acc, k->kf->acc_rot);
     MatrixScale(k->kf->acc_rot, dt);
+    MatrixAddIncrease(k->kf->acc_rot,k->g);
     MatrixAddIncrease(k->kf->speed, k->kf->acc_rot);
 
     k->kf->Xk_k->data[3][0] = k->kf->speed->data[0][0];
@@ -249,6 +218,8 @@ void KalmanMadgwickPredict(KalmanMadgwickFilter_t *k, double timeNow, Gyroscope_
 
     MatrixScale(k->kf->speed, dt);
     MatrixMultiply(k->Rot, k->acc, k->kf->acc_rot);
+    MatrixAddIncrease(k->kf->acc_rot,k->g);
+
     MatrixScale(k->kf->acc_rot, dt * dt * 0.5);
 
     MatrixAddIncrease(k->kf->route, k->kf->acc_rot);

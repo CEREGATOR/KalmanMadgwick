@@ -16,7 +16,6 @@ KalmanFilter_t *KalmanFilterCreate(int stateDimension,
 
   f->route = MatrixAlloc(3, 1);
   f->speed = MatrixAlloc(3, 1);
-  f->euler = MatrixAlloc(3, 1);
   f->bg = MatrixAlloc(3, 1);
   f->ba = MatrixAlloc(3, 1);
 
